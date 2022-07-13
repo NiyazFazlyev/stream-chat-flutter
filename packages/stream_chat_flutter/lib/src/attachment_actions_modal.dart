@@ -25,9 +25,9 @@ class AttachmentActionsModal extends StatelessWidget {
     this.onShowMessage,
     this.imageDownloader,
     this.fileDownloader,
-    this.showReply = true,
-    this.showShowInChat = true,
-    this.showSave = true,
+    this.showReply = false,
+    this.showShowInChat = false,
+    this.showSave = false,
     this.showDelete = true,
     this.customActions = const [],
   });
@@ -163,8 +163,7 @@ class AttachmentActionsModal extends StatelessWidget {
                         }) saveImage = imageDownloader ?? _downloadAttachment;
                         final downloader = isImage ? saveImage : saveFile;
 
-                        final progressNotifier =
-                            ValueNotifier<_DownloadProgress?>(
+                        final progressNotifier = ValueNotifier<_DownloadProgress?>(
                           _DownloadProgress.initial(),
                         );
                         final downloadedPathNotifier = ValueNotifier<String?>(
@@ -202,9 +201,7 @@ class AttachmentActionsModal extends StatelessWidget {
                         );
                       },
                     ),
-                  if (StreamChat.of(context).currentUser?.id ==
-                          message.user?.id &&
-                      showDelete)
+                  if (StreamChat.of(context).currentUser?.id == message.user?.id && showDelete)
                     _buildButton(
                       context,
                       context.translations.deleteLabel.capitalize(),
@@ -214,14 +211,11 @@ class AttachmentActionsModal extends StatelessWidget {
                       ),
                       () {
                         final channel = StreamChannel.of(context).channel;
-                        if (message.attachments.length > 1 ||
-                            message.text?.isNotEmpty == true) {
-                          final currentAttachmentIndex =
-                              message.attachments.indexWhere(
+                        if (message.attachments.length > 1 || message.text?.isNotEmpty == true) {
+                          final currentAttachmentIndex = message.attachments.indexWhere(
                             (element) => element.id == attachment.id,
                           );
-                          final remainingAttachments = [...message.attachments]
-                            ..removeAt(currentAttachmentIndex);
+                          final remainingAttachments = [...message.attachments]..removeAt(currentAttachmentIndex);
                           channel.updateMessage(message.copyWith(
                             attachments: remainingAttachments,
                           ));
@@ -287,10 +281,7 @@ class AttachmentActionsModal extends StatelessWidget {
                 const SizedBox(width: 16),
                 Text(
                   title,
-                  style: StreamChatTheme.of(context)
-                      .textTheme
-                      .body
-                      .copyWith(color: color),
+                  style: StreamChatTheme.of(context).textTheme.body.copyWith(color: color),
                 ),
               ],
             ),
@@ -366,10 +357,8 @@ class AttachmentActionsModal extends StatelessWidget {
                                     Center(
                                       child: Text(
                                         '${progress.receivedValueInMB} MB',
-                                        style:
-                                            theme.textTheme.headline.copyWith(
-                                          color:
-                                              theme.colorTheme.textLowEmphasis,
+                                        style: theme.textTheme.headline.copyWith(
+                                          color: theme.colorTheme.textLowEmphasis,
                                         ),
                                       ),
                                     ),
@@ -393,8 +382,7 @@ class AttachmentActionsModal extends StatelessWidget {
   }) async {
     String? filePath;
     final appDocDir = await getTemporaryDirectory();
-    final url =
-        attachment.assetUrl ?? attachment.imageUrl ?? attachment.thumbUrl!;
+    final url = attachment.assetUrl ?? attachment.imageUrl ?? attachment.thumbUrl!;
     await Dio().download(
       url,
       (Headers responseHeaders) {
@@ -413,8 +401,7 @@ class AttachmentActionsModal extends StatelessWidget {
 class _DownloadProgress {
   const _DownloadProgress(this.total, this.received);
 
-  factory _DownloadProgress.initial() =>
-      _DownloadProgress(double.maxFinite.toInt(), 0);
+  factory _DownloadProgress.initial() => _DownloadProgress(double.maxFinite.toInt(), 0);
 
   final int total;
   final int received;

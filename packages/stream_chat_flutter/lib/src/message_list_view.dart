@@ -646,9 +646,10 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
 
                     if (spacingRules.isNotEmpty) {
                       separator = widget.spacingWidgetBuilder?.call(context, spacingRules) ?? const SizedBox(height: 8);
+                    } else {
+                      separator = widget.spacingWidgetBuilder?.call(context, [SpacingType.defaultSpacing]) ??
+                          const SizedBox(height: 2);
                     }
-                    separator = widget.spacingWidgetBuilder?.call(context, [SpacingType.defaultSpacing]) ??
-                        const SizedBox(height: 2);
 
                     if (!isThread && unreadCount > 0 && unreadCount == i - 1) {
                       final unreadMessagesSeparator = widget.unreadMessagesSeparatorBuilder?.call(context, unreadCount);

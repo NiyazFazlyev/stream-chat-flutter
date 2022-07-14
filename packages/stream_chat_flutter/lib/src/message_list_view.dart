@@ -833,7 +833,7 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
   }
 
   Positioned _buildFloatingDateDivider(int itemCount) => Positioned(
-        top: 20,
+        top: 0,
         left: 0,
         right: 0,
         child: BetterStreamBuilder<Iterable<ItemPosition>>(
@@ -927,7 +927,7 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
     } else {
       _scrollController!.scrollTo(
         index: index,
-        duration: const Duration(seconds: 1),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     }

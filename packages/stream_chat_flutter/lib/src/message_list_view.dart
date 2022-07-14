@@ -5,6 +5,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:stream_chat_flutter/scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:stream_chat_flutter/src/chaika_customs/message_extension.dart';
 import 'package:stream_chat_flutter/src/extension.dart';
 import 'package:stream_chat_flutter/src/swipeable.dart';
 import 'package:stream_chat_flutter/stream_chat_flutter.dart';
@@ -208,6 +209,7 @@ class StreamMessageListView extends StatefulWidget {
     this.paginationLoadingIndicatorBuilder,
     this.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.onDrag,
     this.spacingWidgetBuilder,
+    this.hideDeletedMessages = false,
   });
 
   /// [ScrollViewKeyboardDismissBehavior] the defines how this [PositionedList] will
@@ -355,6 +357,9 @@ class StreamMessageListView extends StatefulWidget {
   /// message, default spacing, etc)
   final SpacingWidgetBuilder? spacingWidgetBuilder;
 
+  /// If the [hideDeletedMessages] is true, deletes the deleted messages will be excluded from the list of messages
+  final bool hideDeletedMessages;
+
   @override
   _StreamMessageListViewState createState() => _StreamMessageListViewState();
 }
@@ -455,6 +460,8 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
       );
 
   Widget _buildListView(List<Message> data) {
+    messages = widget.hideDeletedMessages ? data.where((element) => !element.isDeleted).toList() : data;
+
     messages = data;
     for (var index = 0; index < messages.length; index++) {
       messagesIndex[messages[index].id] = index;
@@ -627,6 +634,7 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
                     final isThread = message.replyCount! > 0;
                     final isDeleted = message.isDeleted;
                     final hasTimeDiff = timeDiff >= 1;
+                    final isEdited = message.isEdited;
 
                     if (hasTimeDiff) {
                       spacingRules.add(SpacingType.timeDiff);
@@ -642,6 +650,9 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
 
                     if (isDeleted) {
                       spacingRules.add(SpacingType.deleted);
+                    }
+                    if (isEdited) {
+                      spacingRules.add(SpacingType.edited);
                     }
 
                     if (spacingRules.isNotEmpty) {

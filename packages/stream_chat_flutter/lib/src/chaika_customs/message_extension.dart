@@ -2,7 +2,7 @@ import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
 ///Message extesion
 extension MessageX on Message {
-  /// Message edited DateTime,
+  /// Message edited DateTime in UTC,
   /// if message didn't edited return null
   DateTime? get editedAt {
     final _editedAt = extraData['edited_at'];
@@ -14,4 +14,9 @@ extension MessageX on Message {
 
   /// Checking if the message is edited
   bool get isEdited => editedAt != null;
+
+  /// Add message edited time
+  void addEditedTime(DateTime dateTime) {
+    extraData.addAll({'edited_at': dateTime.toUtc().toIso8601String()});
+  }
 }

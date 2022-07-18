@@ -75,3 +75,5 @@ export 'src/v4/stream_channel_info_bottom_sheet.dart';
 export 'src/v4/stream_channel_name.dart';
 export 'src/v4/stream_message_preview_text.dart';
 export 'src/visible_footnote.dart';
+// ignore: directives_ordering
+export 'src/chaika_customs/message_extension.dart';

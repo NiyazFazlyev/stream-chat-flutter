@@ -393,7 +393,7 @@ class AttachmentActionsModal extends StatelessWidget {
       onReceiveProgress: progressCallback,
     );
     final result = await ImageGallerySaver.saveFile(filePath!);
-    downloadedPathCallback?.call((result as Map)['filePath']);
+    downloadedPathCallback?.call((result as Map)['filePath'] ?? filePath);
     return (result as Map)['filePath'];
   }
 }

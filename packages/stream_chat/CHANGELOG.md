@@ -1,3 +1,44 @@
+## 4.6.0
+
+✅ Added
+
+- Added `StreamChatClient.getCallToken` and `StreamChatClient.createCall` methods.
+
+🐞 Fixed
+
+- Only listen to client events when the user is connected to the websocket.
+
+## 4.5.0
+
+🐞 Fixed
+
+- Fix `Channel.removeMessage` not able to remove thread message.
+
+✅ Added
+
+- Added `hide_history` flag in `client.addChannelMembers`, `channel.addMembers`.
+
+## 4.4.1
+
+🐞 Fixed
+
+- Do not serialize `AttachmentFile.bytes`
+
+## 4.4.0
+
+🐞 Fixed
+
+- Fix WebSocket contemporary connection calls while disconnecting
+
+✅ Added
+
+- Export `StreamAttachmentFileUploader`.
+
+🔄 Changed
+
+- Deprecated `StreamChatClient.attachmentFileUploader`,
+  Use `StreamChatClient.attachmentFileUploaderProvider` instead.
+
 ## 4.3.0
 
 🐞 Fixed

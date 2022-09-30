@@ -208,8 +208,8 @@ class StreamMessageListView extends StatefulWidget {
     this.paginationLimit = 20,
     this.paginationLoadingIndicatorBuilder,
     this.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.onDrag,
-    this.spacingWidgetBuilder,
     this.hideDeletedMessages = false,
+    this.spacingWidgetBuilder = _defaultSpacingWidgetBuilder,
   });
 
   /// [ScrollViewKeyboardDismissBehavior] the defines how this [PositionedList] will
@@ -355,7 +355,17 @@ class StreamMessageListView extends StatefulWidget {
   /// A List of [SpacingType] is provided to provide more data about the
   /// type of message (thread, difference in time between current and last
   /// message, default spacing, etc)
-  final SpacingWidgetBuilder? spacingWidgetBuilder;
+  final SpacingWidgetBuilder spacingWidgetBuilder;
+
+  static Widget _defaultSpacingWidgetBuilder(
+    BuildContext context,
+    List<SpacingType> spacingTypes,
+  ) {
+    if (!spacingTypes.contains(SpacingType.defaultSpacing)) {
+      return const SizedBox(height: 8);
+    }
+    return const SizedBox(height: 2);
+  }
 
   /// If the [hideDeletedMessages] is true, deletes the deleted messages will be excluded from the list of messages
   final bool hideDeletedMessages;
@@ -608,7 +618,6 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
                     }
 
                     late final Message message, nextMessage;
-                    late Widget separator;
                     if (widget.reverse) {
                       message = messages[i - 1];
                       nextMessage = messages[i - 2];
@@ -616,6 +625,10 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
                       message = messages[i - 2];
                       nextMessage = messages[i - 1];
                     }
+
+                    Widget separator;
+
+                    final isThread = message.replyCount! > 0;
 
                     if (!Jiffy(message.createdAt.toLocal()).isSame(
                       nextMessage.createdAt.toLocal(),
@@ -628,66 +641,35 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
                       Units.MINUTE,
                     );
 
-                    final spacingRules = <SpacingType>[];
-
                     final isNextUserSame = message.user!.id == nextMessage.user?.id;
-                    final isThread = message.replyCount! > 0;
                     final isDeleted = message.isDeleted;
                     final hasTimeDiff = timeDiff >= 1;
-                    final isEdited = message.isEdited;
 
-                    if (hasTimeDiff) {
-                      spacingRules.add(SpacingType.timeDiff);
-                    }
+                    final spacingRules = [
+                      if (hasTimeDiff) SpacingType.timeDiff,
+                      if (!isNextUserSame) SpacingType.otherUser,
+                      if (isThread) SpacingType.thread,
+                      if (isDeleted) SpacingType.deleted,
+                      if (hasTimeDiff) SpacingType.timeDiff,
+                    ];
 
-                    if (!isNextUserSame) {
-                      spacingRules.add(SpacingType.otherUser);
-                    }
-
-                    if (isThread) {
-                      spacingRules.add(SpacingType.thread);
-                    }
-
-                    if (isDeleted) {
-                      spacingRules.add(SpacingType.deleted);
-                    }
-                    if (isEdited) {
-                      spacingRules.add(SpacingType.edited);
+                    if (spacingRules.isEmpty) {
+                      spacingRules.add(SpacingType.defaultSpacing);
                     }
 
-                    if (spacingRules.isNotEmpty) {
-                      separator = widget.spacingWidgetBuilder?.call(context, spacingRules) ?? const SizedBox(height: 8);
-                    } else {
-                      separator = widget.spacingWidgetBuilder?.call(context, [SpacingType.defaultSpacing]) ??
-                          const SizedBox(height: 2);
-                    }
+                    separator = widget.spacingWidgetBuilder.call(
+                      context,
+                      spacingRules,
+                    );
 
                     if (!isThread && unreadCount > 0 && unreadCount == i - 1) {
-                      final unreadMessagesSeparator = widget.unreadMessagesSeparatorBuilder?.call(context, unreadCount);
+                      final unreadMessagesSeparator = _buildUnreadMessagesSeparator(unreadCount);
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           separator,
-                          unreadMessagesSeparator ??
-                              Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    gradient: _streamTheme.colorTheme.bgGradient,
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(8),
-                                    child: Text(
-                                      context.translations.unreadMessagesSeparatorText(
-                                        unreadCount,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      style: StreamChannelHeaderTheme.of(context).subtitleStyle,
-                                    ),
-                                  ),
-                                ),
-                              ),
+                          unreadMessagesSeparator,
                         ],
                       );
                     }
@@ -795,6 +777,29 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
     }
 
     return child;
+  }
+
+  Widget _buildUnreadMessagesSeparator(int unreadCount) {
+    final unreadMessagesSeparator = widget.unreadMessagesSeparatorBuilder?.call(context, unreadCount) ??
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: _streamTheme.colorTheme.bgGradient,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(
+                context.translations.unreadMessagesSeparatorText(
+                  unreadCount,
+                ),
+                textAlign: TextAlign.center,
+                style: StreamChannelHeaderTheme.of(context).subtitleStyle,
+              ),
+            ),
+          ),
+        );
+    return unreadMessagesSeparator;
   }
 
   Widget _buildDateDivider(Message message) {

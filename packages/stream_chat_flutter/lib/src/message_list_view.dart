@@ -635,33 +635,33 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
                       Units.DAY,
                     )) {
                       separator = _buildDateDivider(nextMessage);
+                    } else {
+                      final timeDiff = Jiffy(nextMessage.createdAt.toLocal()).diff(
+                        message.createdAt.toLocal(),
+                        Units.MINUTE,
+                      );
+
+                      final isNextUserSame = message.user!.id == nextMessage.user?.id;
+                      final isDeleted = message.isDeleted;
+                      final hasTimeDiff = timeDiff >= 1;
+
+                      final spacingRules = [
+                        if (hasTimeDiff) SpacingType.timeDiff,
+                        if (!isNextUserSame) SpacingType.otherUser,
+                        if (isThread) SpacingType.thread,
+                        if (isDeleted) SpacingType.deleted,
+                        if (hasTimeDiff) SpacingType.timeDiff,
+                      ];
+
+                      if (spacingRules.isEmpty) {
+                        spacingRules.add(SpacingType.defaultSpacing);
+                      }
+
+                      separator = widget.spacingWidgetBuilder.call(
+                        context,
+                        spacingRules,
+                      );
                     }
-                    final timeDiff = Jiffy(nextMessage.createdAt.toLocal()).diff(
-                      message.createdAt.toLocal(),
-                      Units.MINUTE,
-                    );
-
-                    final isNextUserSame = message.user!.id == nextMessage.user?.id;
-                    final isDeleted = message.isDeleted;
-                    final hasTimeDiff = timeDiff >= 1;
-
-                    final spacingRules = [
-                      if (hasTimeDiff) SpacingType.timeDiff,
-                      if (!isNextUserSame) SpacingType.otherUser,
-                      if (isThread) SpacingType.thread,
-                      if (isDeleted) SpacingType.deleted,
-                      if (hasTimeDiff) SpacingType.timeDiff,
-                    ];
-
-                    if (spacingRules.isEmpty) {
-                      spacingRules.add(SpacingType.defaultSpacing);
-                    }
-
-                    separator = widget.spacingWidgetBuilder.call(
-                      context,
-                      spacingRules,
-                    );
-
                     if (!isThread && unreadCount > 0 && unreadCount == i - 1) {
                       final unreadMessagesSeparator = _buildUnreadMessagesSeparator(unreadCount);
 

@@ -634,6 +634,7 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
                       final isNextUserSame = message.user!.id == nextMessage.user?.id;
                       final isDeleted = message.isDeleted;
                       final hasTimeDiff = timeDiff >= 1;
+                      final isEdited = message.isEdited;
 
                       final spacingRules = [
                         if (hasTimeDiff) SpacingType.timeDiff,
@@ -641,6 +642,7 @@ class _StreamMessageListViewState extends State<StreamMessageListView> {
                         if (isThread) SpacingType.thread,
                         if (isDeleted) SpacingType.deleted,
                         if (hasTimeDiff) SpacingType.timeDiff,
+                        if (isEdited) SpacingType.edited,
                       ];
 
                       if (spacingRules.isEmpty) {

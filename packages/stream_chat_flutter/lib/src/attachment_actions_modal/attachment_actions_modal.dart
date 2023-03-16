@@ -141,8 +141,7 @@ class AttachmentActionsModal extends StatelessWidget {
                         // attachment download dialog
                         Navigator.of(context).pop();
 
-                        final downloader = attachmentDownloader ??
-                            StreamAttachmentHandler.instance.downloadAttachment;
+                        final downloader = attachmentDownloader ?? StreamAttachmentHandler.instance.downloadAttachment;
 
                         // No need to show progress dialog in case of
                         // web or desktop.
@@ -155,8 +154,7 @@ class AttachmentActionsModal extends StatelessWidget {
                           _DownloadProgress.initial(),
                         );
 
-                        final downloadedPathNotifier =
-                            ValueNotifier<String?>(null);
+                        final downloadedPathNotifier = ValueNotifier<String?>(null);
 
                         downloader(
                           attachment,
@@ -266,10 +264,7 @@ class AttachmentActionsModal extends StatelessWidget {
               const SizedBox(width: 16),
               Text(
                 title,
-                style: StreamChatTheme.of(context)
-                    .textTheme
-                    .body
-                    .copyWith(color: color),
+                style: StreamChatTheme.of(context).textTheme.body.copyWith(color: color),
               ),
             ],
           ),
@@ -363,31 +358,6 @@ class AttachmentActionsModal extends StatelessWidget {
       },
     );
   }
-<<<<<<< HEAD:packages/stream_chat_flutter/lib/src/attachment_actions_modal.dart
-
-  Future<String?> _downloadAttachment(
-    Attachment attachment, {
-    ProgressCallback? progressCallback,
-    DownloadedPathCallback? downloadedPathCallback,
-  }) async {
-    String? filePath;
-    final appDocDir = await getTemporaryDirectory();
-    final url = attachment.assetUrl ?? attachment.imageUrl ?? attachment.thumbUrl!;
-    await Dio().download(
-      url,
-      (Headers responseHeaders) {
-        final ext = Uri.parse(url).pathSegments.last;
-        filePath ??= '${appDocDir.path}/${attachment.id}.$ext';
-        return filePath!;
-      },
-      onReceiveProgress: progressCallback,
-    );
-    final result = await ImageGallerySaver.saveFile(filePath!);
-    downloadedPathCallback?.call((result as Map)['filePath'] ?? filePath);
-    return (result as Map)['filePath'];
-  }
-=======
->>>>>>> origin/master:packages/stream_chat_flutter/lib/src/attachment_actions_modal/attachment_actions_modal.dart
 }
 
 class _DownloadProgress {

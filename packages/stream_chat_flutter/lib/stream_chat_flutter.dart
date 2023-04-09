@@ -96,4 +96,4 @@ export 'src/utils/device_segmentation.dart';
 export 'src/utils/extensions.dart';
 export 'src/utils/helpers.dart';
 export 'src/utils/typedefs.dart';
-export 'src/chaika_custom/message_extension.dart'
+export 'src/extensions/message_extension.dart'

@@ -1,7 +1,7 @@
 import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
 ///Message extesion
-extension MessageX on Message {
+extension MessageXX on Message {
   /// Message edited DateTime in UTC,
   /// if message didn't edited return null
   DateTime? get editedAt {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:stream_chat_flutter/src/message_widget/sending_indicator_wrapper.dart';
+import 'package:stream_chat_flutter/src/message_widget/sending_indicator_builder.dart';
 import 'package:stream_chat_flutter/src/message_widget/thread_painter.dart';
 import 'package:stream_chat_flutter/src/message_widget/thread_participants.dart';
 import 'package:stream_chat_flutter/src/message_widget/username.dart';
@@ -147,11 +147,10 @@ class BottomRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isDeleted) {
-      return deletedBottomRowBuilder?.call(
-            context,
-            message,
-          ) ??
-          const Offstage();
+      final deletedBottomRowBuilder = this.deletedBottomRowBuilder;
+      if (deletedBottomRowBuilder != null) {
+        return deletedBottomRowBuilder(context, message);
+      }
     }
 
     final children = <WidgetSpan>[];
@@ -204,7 +203,7 @@ class BottomRow extends StatelessWidget {
       if (showSendingIndicator)
         WidgetSpan(
           child: sendingIndicatorBuilder?.call(context, message) ??
-              SendingIndicatorWrapper(
+              SendingIndicatorBuilder(
                 messageTheme: messageTheme,
                 message: message,
                 hasNonUrlAttachments: hasNonUrlAttachments,

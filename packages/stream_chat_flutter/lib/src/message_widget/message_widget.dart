@@ -107,6 +107,7 @@ class StreamMessageWidget extends StatefulWidget {
     this.imageAttachmentThumbnailSize = const Size(400, 400),
     this.imageAttachmentThumbnailResizeType = 'clip',
     this.imageAttachmentThumbnailCropType = 'center',
+    this.attachmentActionsModalBuilder,
   })  : assert(
           bottomRowBuilder == null || bottomRowBuilderWithDefaultWidget == null,
           'You can only use one of the two bottom row builders',
@@ -144,6 +145,8 @@ class StreamMessageWidget extends StatefulWidget {
                       imageThumbnailResizeType:
                           imageAttachmentThumbnailResizeType,
                       imageThumbnailCropType: imageAttachmentThumbnailCropType,
+                      attachmentActionsModalBuilder:
+                          attachmentActionsModalBuilder,
                     ),
                   ),
                   attachmentShape: border,
@@ -171,6 +174,7 @@ class StreamMessageWidget extends StatefulWidget {
                 imageThumbnailSize: imageAttachmentThumbnailSize,
                 imageThumbnailResizeType: imageAttachmentThumbnailResizeType,
                 imageThumbnailCropType: imageAttachmentThumbnailCropType,
+                attachmentActionsModalBuilder: attachmentActionsModalBuilder,
               ),
               attachmentShape: border,
             );
@@ -204,6 +208,8 @@ class StreamMessageWidget extends StatefulWidget {
                             onAttachmentTap(message, attachment);
                           }
                         : null,
+                    attachmentActionsModalBuilder:
+                        attachmentActionsModalBuilder,
                   );
                 }).toList(),
               ),
@@ -533,6 +539,9 @@ class StreamMessageWidget extends StatefulWidget {
   /// {@macro onMessageWidgetAttachmentTap}
   final OnMessageWidgetAttachmentTap? onAttachmentTap;
 
+  /// {@macro attachmentActionsBuilder}
+  final AttachmentActionsBuilder? attachmentActionsModalBuilder;
+
   /// Size of the image attachment thumbnail.
   final Size imageAttachmentThumbnailSize;
 
@@ -617,6 +626,7 @@ class StreamMessageWidget extends StatefulWidget {
     Size? imageAttachmentThumbnailSize,
     String? imageAttachmentThumbnailResizeType,
     String? imageAttachmentThumbnailCropType,
+    AttachmentActionsBuilder? attachmentActionsModalBuilder,
   }) {
     assert(
       bottomRowBuilder == null || bottomRowBuilderWithDefaultWidget == null,
@@ -703,6 +713,8 @@ class StreamMessageWidget extends StatefulWidget {
           this.imageAttachmentThumbnailResizeType,
       imageAttachmentThumbnailCropType: imageAttachmentThumbnailCropType ??
           this.imageAttachmentThumbnailCropType,
+      attachmentActionsModalBuilder:
+          attachmentActionsModalBuilder ?? this.attachmentActionsModalBuilder,
     );
   }
 
@@ -782,8 +794,7 @@ class _StreamMessageWidgetState extends State<StreamMessageWidget>
       showUsername ||
       showTimeStamp ||
       showInChannel ||
-      showSendingIndicator ||
-      isDeleted;
+      showSendingIndicator;
 
   /// {@template isPinned}
   /// Whether [StreamMessageWidget.message] is pinned or not.
@@ -998,7 +1009,8 @@ class _StreamMessageWidgetState extends State<StreamMessageWidget>
           title: Text(context.translations.copyMessageLabel),
           onClick: () {
             Navigator.of(context, rootNavigator: true).pop();
-            Clipboard.setData(ClipboardData(text: widget.message.text));
+            final text = widget.message.text;
+            if (text != null) Clipboard.setData(ClipboardData(text: text));
           },
         ),
       if (shouldShowEditAction) ...[
@@ -1023,6 +1035,7 @@ class _StreamMessageWidgetState extends State<StreamMessageWidget>
               builder: (_) => EditMessageSheet(
                 message: widget.message,
                 channel: StreamChannel.of(context).channel,
+                editMessageInputBuilder: widget.editMessageInputBuilder,
               ),
             );
           },
@@ -1131,6 +1144,7 @@ class _StreamMessageWidgetState extends State<StreamMessageWidget>
     showDialog(
       useRootNavigator: false,
       context: context,
+      useSafeArea: false,
       barrierColor: _streamChatTheme.colorTheme.overlay,
       builder: (context) => StreamChannel(
         channel: channel,
@@ -1156,8 +1170,10 @@ class _StreamMessageWidgetState extends State<StreamMessageWidget>
                     ? DisplayWidget.gone
                     : DisplayWidget.show,
           ),
-          onCopyTap: (message) =>
-              Clipboard.setData(ClipboardData(text: message.text)),
+          onCopyTap: (message) {
+            final text = message.text;
+            if (text != null) Clipboard.setData(ClipboardData(text: text));
+          },
           messageTheme: widget.messageTheme,
           reverse: widget.reverse,
           showDeleteMessage: shouldShowDeleteAction,

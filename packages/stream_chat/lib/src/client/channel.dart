@@ -463,12 +463,19 @@ class Channel {
 
     client.logger.info('Found ${attachments.length} attachments');
 
-    void updateAttachment(Attachment attachment) {
+    void updateAttachment(Attachment attachment, {bool remove = false}) {
       final index = message!.attachments.indexWhere(
         (it) => it.id == attachment.id,
       );
       if (index != -1) {
-        final newAttachments = [...message!.attachments]..[index] = attachment;
+        // update or remove attachment from message.
+        final List<Attachment> newAttachments;
+        if (remove) {
+          newAttachments = [...message!.attachments]..removeAt(index);
+        } else {
+          newAttachments = [...message!.attachments]..[index] = attachment;
+        }
+
         final updatedMessage = message!.copyWith(attachments: newAttachments);
         state?.updateMessage(updatedMessage);
         // updating original message for next iteration
@@ -533,6 +540,14 @@ class Channel {
           );
         }
       }).catchError((e, stk) {
+        if (e is StreamChatNetworkError && e.isRequestCancelledError) {
+          client.logger.info('Attachment ${it.id} upload cancelled');
+
+          // remove attachment from message if cancelled.
+          updateAttachment(it, remove: true);
+          return;
+        }
+
         client.logger.severe('error uploading the attachment', e, stk);
         updateAttachment(
           it.copyWith(uploadState: UploadState.failed(error: e.toString())),
@@ -731,6 +746,7 @@ class Channel {
       state!.deleteMessage(
         message.copyWith(
           type: 'deleted',
+          deletedAt: message.deletedAt ?? DateTime.now(),
           status: MessageSendingStatus.sent,
         ),
         hardDelete: hardDelete,
@@ -982,26 +998,24 @@ class Channel {
   ) async {
     final type = reaction.type;
 
-    final reactionCounts = {...message.reactionCounts ?? <String, int>{}};
+    final reactionCounts = {...?message.reactionCounts};
     if (reactionCounts.containsKey(type)) {
       reactionCounts.update(type, (value) => value - 1);
     }
-    final reactionScores = {...message.reactionScores ?? <String, int>{}};
+    final reactionScores = {...?message.reactionScores};
     if (reactionScores.containsKey(type)) {
       reactionScores.update(type, (value) => value - 1);
     }
 
-    final latestReactions = [...message.latestReactions ?? <Reaction>[]]
-      ..removeWhere((r) =>
-          r.userId == reaction.userId &&
-          r.type == reaction.type &&
-          r.messageId == reaction.messageId);
+    final latestReactions = [...?message.latestReactions]..removeWhere((r) =>
+        r.userId == reaction.userId &&
+        r.type == reaction.type &&
+        r.messageId == reaction.messageId);
 
-    final ownReactions = message.ownReactions
-      ?..removeWhere((r) =>
-          r.userId == reaction.userId &&
-          r.type == reaction.type &&
-          r.messageId == reaction.messageId);
+    final ownReactions = [...?message.ownReactions]..removeWhere((r) =>
+        r.userId == reaction.userId &&
+        r.type == reaction.type &&
+        r.messageId == reaction.messageId);
 
     final newMessage = message.copyWith(
       reactionCounts: reactionCounts..removeWhere((_, value) => value == 0),
@@ -1219,11 +1233,11 @@ class Channel {
   }
 
   /// Loads the initial channel state and watches for changes.
-  Future<ChannelState> watch() async {
+  Future<ChannelState> watch({bool presence = false}) async {
     ChannelState response;
 
     try {
-      response = await query(watch: true);
+      response = await query(watch: true, presence: presence);
     } catch (error, stackTrace) {
       if (!_initializedCompleter.isCompleted) {
         _initializedCompleter.completeError(error, stackTrace);
@@ -1470,19 +1484,11 @@ class Channel {
   /// will be removed for the user.
   Future<EmptyResponse> hide({bool clearHistory = false}) async {
     _checkInitialized();
-    final response = await _client.hideChannel(
+    return _client.hideChannel(
       id!,
       type,
       clearHistory: clearHistory,
     );
-    if (clearHistory) {
-      state!.truncate();
-      final cid = _cid;
-      if (cid != null) {
-        await _client.chatPersistenceClient?.deleteMessageByCid(cid);
-      }
-    }
-    return response;
   }
 
   /// Removes the hidden status for the channel.
@@ -1612,6 +1618,10 @@ class ChannelClientState {
     _listenMemberBanned();
 
     _listenMemberUnbanned();
+
+    _listenUserStartWatching();
+
+    _listenUserStopWatching();
 
     _startCleaningStaleTypingEvents();
 
@@ -1754,6 +1764,39 @@ class ChannelClientState {
     ));
   }
 
+  void _listenUserStartWatching() {
+    _subscriptions.add(
+      _channel.on(EventType.userWatchingStart).listen((event) {
+        final watcher = event.user;
+        if (watcher != null) {
+          final existingWatchers = channelState.watchers;
+          updateChannelState(channelState.copyWith(
+            watchers: [
+              ...?existingWatchers,
+              watcher,
+            ],
+          ));
+        }
+      }),
+    );
+  }
+
+  void _listenUserStopWatching() {
+    _subscriptions.add(
+      _channel.on(EventType.userWatchingStop).listen((event) {
+        final watcher = event.user;
+        if (watcher != null) {
+          final existingWatchers = channelState.watchers;
+          updateChannelState(channelState.copyWith(
+            watchers: existingWatchers
+                ?.where((user) => user.id != watcher.id)
+                .toList(growable: false),
+          ));
+        }
+      }),
+    );
+  }
+
   void _listenMemberUnbanned() {
     _subscriptions.add(_channel
         .on(EventType.userUnbanned)
@@ -1886,11 +1929,9 @@ class ChannelClientState {
   void _listenMessageDeleted() {
     _subscriptions.add(_channel.on(EventType.messageDeleted).listen((event) {
       final message = event.message!;
-      if (event.hardDelete == true) {
-        removeMessage(message);
-      } else {
-        updateMessage(message);
-      }
+      final hardDelete = event.hardDelete ?? false;
+
+      deleteMessage(message, hardDelete: hardDelete);
     }));
   }
 
@@ -1915,18 +1956,35 @@ class ChannelClientState {
 
   /// Updates the [message] in the state if it exists. Adds it otherwise.
   void updateMessage(Message message) {
+    // Regular messages, which are shown in channel.
     if (message.parentId == null || message.showInChannel == true) {
-      final newMessages = [...messages];
+      var newMessages = [...messages];
       final oldIndex = newMessages.indexWhere((m) => m.id == message.id);
       if (oldIndex != -1) {
-        Message? m;
+        var updatedMessage = message;
+        // Add quoted message to the message if it is not present.
         if (message.quotedMessageId != null && message.quotedMessage == null) {
           final oldMessage = newMessages[oldIndex];
-          m = message.copyWith(
+          updatedMessage = updatedMessage.copyWith(
             quotedMessage: oldMessage.quotedMessage,
           );
         }
-        newMessages[oldIndex] = m ?? message;
+        newMessages[oldIndex] = updatedMessage;
+
+        // Update quoted message reference for every message if available.
+        newMessages = [...newMessages].map((it) {
+          // Early return if the message doesn't have a quoted message.
+          if (it.quotedMessageId != message.id) return it;
+
+          // Setting it to null will remove the quoted message from the message
+          // So, we are setting the same message but with the deleted state.
+          return it.copyWith(
+            quotedMessage: updatedMessage.copyWith(
+              type: 'deleted',
+              deletedAt: updatedMessage.deletedAt ?? DateTime.now(),
+            ),
+          );
+        }).toList();
       } else {
         newMessages.add(message);
       }
@@ -1955,6 +2013,7 @@ class ChannelClientState {
       );
     }
 
+    // Thread messages, which are shown in thread page.
     if (message.parentId != null) {
       updateThreadInfo(message.parentId!, [message]);
     }
@@ -1984,9 +2043,22 @@ class ChannelClientState {
     }
 
     // Remove regular message, thread message shown in channel
-    final allMessages = [...messages];
+    var updatedMessages = [...messages]..removeWhere((e) => e.id == message.id);
+
+    // Remove quoted message reference from every message if available.
+    updatedMessages = [...updatedMessages].map((it) {
+      // Early return if the message doesn't have a quoted message.
+      if (it.quotedMessageId != message.id) return it;
+
+      // Setting it to null will remove the quoted message from the message.
+      return it.copyWith(
+        quotedMessage: null,
+        quotedMessageId: null,
+      );
+    }).toList();
+
     _channelState = _channelState.copyWith(
-      messages: allMessages..removeWhere((e) => e.id == message.id),
+      messages: updatedMessages,
     );
   }
 
@@ -2083,7 +2155,7 @@ class ChannelClientState {
         channelStateStream.map((cs) => cs.watchers),
         _channel.client.state.usersStream,
         (watchers, users) => watchers!.map((e) => users[e.id] ?? e).toList(),
-      );
+      ).distinct(const ListEquality().equals);
 
   /// Channel member for the current user.
   Member? get currentUserMember => members.firstWhereOrNull(

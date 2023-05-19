@@ -360,4 +360,57 @@ void main() {
             .itemTrailingEdge,
         1);
   });
+
+  testWidgets('Does not crash when updated offscreen',
+      (WidgetTester tester) async {
+    late StateSetter setState;
+    var updated = false;
+
+    // There's 0 relayout boundaries in this subtree.
+    final widget = StatefulBuilder(builder: (context, stateSetter) {
+      setState = stateSetter;
+      return Positioned(
+          left: 0,
+          right: 0,
+          child: PositionedList(
+            shrinkWrap: true,
+            itemCount: 1,
+            // When `updated` becomes true this line inserts a
+            // RenderIndexedSemantics to the render tree.
+            addSemanticIndexes: updated,
+            itemBuilder: (context, index) => const SizedBox(height: itemHeight),
+          ));
+    });
+
+    await tester.pumpWidget(Directionality(
+      textDirection: TextDirection.ltr,
+      child: Overlay(
+        initialEntries: [
+          OverlayEntry(builder: (context) => widget, maintainState: true),
+        ],
+      ),
+    ));
+
+    // Insert a new opaque OverlayEntry that would prevent the first
+    // OverlayEntry from doing re-layout. Since there's no relayout boundaries
+    // in the first OverlayEntry, no dirty RenderObjects in its render subtree
+    // can update layout.
+    final newOverlay = OverlayEntry(
+      builder: (context) => const SizedBox.expand(),
+      opaque: true,
+    );
+    tester.state<OverlayState>(find.byType(Overlay)).insert(newOverlay);
+    await tester.pump();
+
+    // Update the list item's render tree. A new RenderObjectElement is
+    // inflated, registeredElement.renderObject will point to this new
+    // RenderObjectElement's RenderObject (RenderIndexedSemantics), which has
+    // never been laid out.
+    setState(() {
+      updated = true;
+    });
+
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 }

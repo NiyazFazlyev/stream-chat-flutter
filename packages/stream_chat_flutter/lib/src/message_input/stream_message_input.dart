@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart'
     hide ErrorListener;
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:shimmer/shimmer.dart';
@@ -23,6 +24,33 @@ import 'package:stream_chat_flutter/stream_chat_flutter.dart';
 
 const _kCommandTrigger = '/';
 const _kMentionTrigger = '@';
+
+/// Signature for the function that determines if a [matchedUri] should be
+/// previewed as an OG Attachment.
+typedef OgPreviewFilter = bool Function(
+  Uri matchedUri,
+  String messageText,
+);
+
+/// Different types of hints that can be shown in [StreamMessageInput].
+enum HintType {
+  /// Hint for [StreamMessageInput] when the command is enabled and the command
+  /// is 'giphy'.
+  searchGif,
+
+  /// Hint for [StreamMessageInput] when there are attachments.
+  addACommentOrSend,
+
+  /// Hint for [StreamMessageInput] when slow mode is enabled.
+  slowModeOn,
+
+  /// Hint for [StreamMessageInput] when other conditions are not met.
+  writeAMessage,
+}
+
+/// Function that returns the hint text for [StreamMessageInput] based on
+/// [type].
+typedef HintGetter = String? Function(BuildContext context, HintType type);
 
 /// Inactive state:
 ///
@@ -110,7 +138,18 @@ class StreamMessageInput extends StatefulWidget {
     this.enableMentionsOverlay = true,
     this.onQuotedMessageCleared,
     this.enableActionAnimation = true,
+    this.sendMessageKeyPredicate = _defaultSendMessageKeyPredicate,
+    this.clearQuotedMessageKeyPredicate =
+        _defaultClearQuotedMessageKeyPredicate,
+    this.ogPreviewFilter = _defaultOgPreviewFilter,
+    this.hintGetter = _defaultHintGetter,
   });
+
+  /// The predicate used to send a message on desktop/web
+  final KeyEventPredicate sendMessageKeyPredicate;
+
+  /// The predicate used to clear the quoted message on desktop/web
+  final KeyEventPredicate clearQuotedMessageKeyPredicate;
 
   /// If true the message input will animate the actions while you type
   final bool enableActionAnimation;
@@ -249,8 +288,55 @@ class StreamMessageInput extends StatefulWidget {
   /// Callback for when the quoted message is cleared
   final VoidCallback? onQuotedMessageCleared;
 
+  /// The filter used to determine if a link should be shown as an OpenGraph
+  /// preview.
+  final OgPreviewFilter ogPreviewFilter;
+
+  /// Returns the hint text for the message input.
+  final HintGetter hintGetter;
+
+  static String? _defaultHintGetter(
+    BuildContext context,
+    HintType type,
+  ) {
+    switch (type) {
+      case HintType.searchGif:
+        return context.translations.searchGifLabel;
+      case HintType.addACommentOrSend:
+        return context.translations.addACommentOrSendLabel;
+      case HintType.slowModeOn:
+        return context.translations.slowModeOnLabel;
+      case HintType.writeAMessage:
+        return context.translations.writeAMessageLabel;
+    }
+  }
+
+  static bool _defaultOgPreviewFilter(
+    Uri matchedUri,
+    String messageText,
+  ) {
+    // Show the preview for all links
+    return true;
+  }
+
   static bool _defaultValidator(Message message) =>
       message.text?.isNotEmpty == true || message.attachments.isNotEmpty;
+
+  static bool _defaultSendMessageKeyPredicate(
+    FocusNode node,
+    KeyEvent event,
+  ) {
+    // On desktop/web, send the message when the user presses the enter key.
+    return event is KeyUpEvent && event.logicalKey == LogicalKeyboardKey.enter;
+  }
+
+  static bool _defaultClearQuotedMessageKeyPredicate(
+    FocusNode node,
+    KeyEvent event,
+  ) {
+    // On desktop/web, clear the quoted message when the user presses the escape key.
+    return event is KeyUpEvent && event.logicalKey == LogicalKeyboardKey.escape;
+  }
 
   @override
   StreamMessageInputState createState() => StreamMessageInputState();
@@ -509,9 +595,6 @@ class StreamMessageInputState extends State<StreamMessageInput>
                             : CrossFadeState.showSecond,
                       ),
                     ),
-                  // PlatformWidgetBuilder(
-                  //   mobile: (context, child) => _buildFilePickerSection(),
-                  // ),
                 ],
               ),
             ),
@@ -753,24 +836,12 @@ class StreamMessageInputState extends State<StreamMessageInput>
                   LimitedBox(
                     maxHeight: widget.maxHeight,
                     child: PlatformWidgetBuilder(
-                      web: (context, child) => KeyboardShortcutRunner(
-                        onEnterKeypress: sendMessage,
-                        onEscapeKeypress: () {
-                          if (_hasQuotedMessage &&
-                              _effectiveController.text.isEmpty) {
-                            widget.onQuotedMessageCleared?.call();
-                          }
-                        },
+                      web: (context, child) => Focus(
+                        onKeyEvent: _handleKeyPressed,
                         child: child!,
                       ),
-                      desktop: (context, child) => KeyboardShortcutRunner(
-                        onEnterKeypress: sendMessage,
-                        onEscapeKeypress: () {
-                          if (_hasQuotedMessage &&
-                              _effectiveController.text.isEmpty) {
-                            widget.onQuotedMessageCleared?.call();
-                          }
-                        },
+                      desktop: (context, child) => Focus(
+                        onKeyEvent: _handleKeyPressed,
                         child: child!,
                       ),
                       mobile: (context, child) => child,
@@ -799,6 +870,25 @@ class StreamMessageInputState extends State<StreamMessageInput>
         ),
       ),
     );
+  }
+
+  KeyEventResult _handleKeyPressed(FocusNode node, KeyEvent event) {
+    // Check for send message key.
+    if (widget.sendMessageKeyPredicate(node, event)) {
+      sendMessage();
+      return KeyEventResult.handled;
+    }
+
+    // Check for clear quoted message key.
+    if (widget.clearQuotedMessageKeyPredicate(node, event)) {
+      if (_hasQuotedMessage && _effectiveController.text.isEmpty) {
+        widget.onQuotedMessageCleared?.call();
+      }
+      return KeyEventResult.handled;
+    }
+
+    // Return ignored to allow other key events to be handled.
+    return KeyEventResult.ignored;
   }
 
   InputDecoration _getInputDecoration(BuildContext context) {
@@ -932,18 +1022,20 @@ class StreamMessageInputState extends State<StreamMessageInput>
     leading: true,
   );
 
-  String _getHint(BuildContext context) {
+  String? _getHint(BuildContext context) {
+    HintType hintType;
+
     if (_commandEnabled && _effectiveController.message.command == 'giphy') {
-      return context.translations.searchGifLabel;
-    }
-    if (_effectiveController.attachments.isNotEmpty) {
-      return context.translations.addACommentOrSendLabel;
-    }
-    if (_timeOut != 0) {
-      return context.translations.slowModeOnLabel;
+      hintType = HintType.searchGif;
+    } else if (_effectiveController.attachments.isNotEmpty) {
+      hintType = HintType.addACommentOrSend;
+    } else if (_timeOut != 0) {
+      hintType = HintType.slowModeOn;
+    } else {
+      hintType = HintType.writeAMessage;
     }
 
-    return context.translations.writeAMessageLabel;
+    return widget.hintGetter.call(context, hintType);
   }
 
   String? _lastSearchedContainsUrlText;
@@ -960,11 +1052,13 @@ class StreamMessageInputState extends State<StreamMessageInput>
     if (_lastSearchedContainsUrlText == value) return;
     _lastSearchedContainsUrlText = value;
 
-    final matchedUrls = _urlRegex.allMatches(value).toList()
-      ..removeWhere((it) {
-        final _parsedMatch = Uri.tryParse(it.group(0) ?? '')?.withScheme;
-        return _parsedMatch?.host.split('.').last.isValidTLD() == false;
-      });
+    final matchedUrls = _urlRegex.allMatches(value).where((it) {
+      final _parsedMatch = Uri.tryParse(it.group(0) ?? '')?.withScheme;
+      if (_parsedMatch == null) return false;
+
+      return _parsedMatch.host.split('.').last.isValidTLD() &&
+          widget.ogPreviewFilter.call(_parsedMatch, value);
+    }).toList();
 
     // Reset the og attachment if the text doesn't contain any url
     if (matchedUrls.isEmpty ||

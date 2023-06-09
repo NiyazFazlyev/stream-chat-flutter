@@ -251,14 +251,14 @@ class StreamChannelState extends State<StreamChannel> {
     channel.state!.truncate();
 
     if (messageId == null) {
-      await channel.query(
+      final state = await channel.query(
         messagesPagination: PaginationParams(
           limit: limit,
         ),
         preferOffline: preferOffline,
       );
       channel.state!.isUpToDate = true;
-      return null;
+      return state;
     }
 
     return channel.query(
@@ -430,28 +430,27 @@ class StreamChannelState extends State<StreamChannel> {
       ],
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          var message = snapshot.error.toString();
-          if (snapshot.error is DioError) {
-            final dioError = snapshot.error as DioError?;
-            if (dioError?.type == DioErrorType.badResponse) {
-              message = dioError!.message ?? 'Bad response';
-            } else {
-              message = 'Check your connection and retry';
+          final error = snapshot.error;
+          if (error is DioException) {
+            if (error.type == DioExceptionType.badResponse) {
+              return Center(child: Text(error.message ?? 'Bad response'));
             }
+            return const Center(child: Text('Check your connection and retry'));
           }
-          return Center(child: Text(message));
+
+          return Center(child: Text(error.toString()));
         }
 
         final dataLoaded = snapshot.data?.every((it) => it) == true;
         if (widget.showLoading && !dataLoaded) {
           return const Center(
-            child: CircularProgressIndicator(),
+            child: CircularProgressIndicator.adaptive(),
           );
         }
         return widget.child;
       },
     );
-    if (initialMessageId != null) {
+    if (_futures.length > 1) {
       child = Material(child: child);
     }
     return child;
